@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'name_input_screen.dart';
 import '../home/home_screen.dart';
@@ -13,11 +14,24 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const String _keyRememberEmail = 'remember_email';
+  static const String _keySavedEmail = 'saved_email';
+  static const String _keyAutoLogin = 'auto_login';
+
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
   bool isLoginMode = true; // true = 로그인, false = 회원가입
   bool obscurePassword = true;
+
+  bool rememberEmail = false;
+  bool autoLogin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedSettings();
+  }
 
   @override
   void dispose() {
@@ -31,6 +45,39 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
+  }
+
+  /// 저장된 이메일 / 체크박스 상태 불러오기
+  Future<void> _loadSavedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final remember = prefs.getBool(_keyRememberEmail) ?? false;
+    final auto = prefs.getBool(_keyAutoLogin) ?? false;
+    final savedEmail = prefs.getString(_keySavedEmail) ?? '';
+
+    if (!mounted) return;
+
+    setState(() {
+      rememberEmail = remember;
+      autoLogin = auto;
+      if (remember && savedEmail.isNotEmpty) {
+        emailController.text = savedEmail;
+      }
+    });
+  }
+
+  /// 로그인 성공 후 체크박스 설정 저장
+  Future<void> _saveSettings(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setBool(_keyRememberEmail, rememberEmail);
+    await prefs.setBool(_keyAutoLogin, autoLogin);
+
+    if (rememberEmail) {
+      await prefs.setString(_keySavedEmail, email);
+    } else {
+      await prefs.remove(_keySavedEmail);
+    }
   }
 
   /// 유저 체크 후 분기
@@ -86,6 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      await _saveSettings(email);
       await handleUser();
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
@@ -131,6 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: email,
         password: password,
       );
+      await _saveSettings(email);
       await handleUser();
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
@@ -149,6 +198,32 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  /// 체크박스 한 줄
+  Widget _buildCheckRow(String label, bool value, ValueChanged<bool> onChanged) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: value,
+                onChanged: (v) => onChanged(v ?? false),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -221,7 +296,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+
+              /// 이메일 저장 / 자동 로그인
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 20,
+                  children: [
+                    _buildCheckRow(
+                      "이메일 저장",
+                      rememberEmail,
+                          (v) => setState(() => rememberEmail = v),
+                    ),
+                    _buildCheckRow(
+                      "자동 로그인",
+                      autoLogin,
+                          (v) => setState(() => autoLogin = v),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               /// 로그인 / 회원가입 버튼
               SizedBox(
@@ -258,7 +355,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextButton(
                     onPressed: () {
                       setState(() => isLoginMode = !isLoginMode);
-                      emailController.clear();
+                      // 이메일 저장이 켜져 있으면 이메일은 유지
+                      if (!rememberEmail) emailController.clear();
                       passwordController.clear();
                     },
                     child: Text(isLoginMode ? "회원가입" : "로그인"),

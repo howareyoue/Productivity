@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../analysis/analysis_screen.dart';
 import '../auth/login_screen.dart';
 import '../task/task_add_screen.dart';
 
@@ -146,6 +147,14 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const TaskAddScreen()),
+    );
+  }
+
+  /// 분석 화면으로 이동
+  void _goAnalysis() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AnalysisScreen()),
     );
   }
 
@@ -405,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _navItem(
               icon: Icons.bar_chart,
               label: "분석",
-              onTap: () => _showMessage("분석 화면은 준비 중입니다"),
+              onTap: _goAnalysis,
             ),
             const SizedBox(width: 48), // FAB 자리
             _navItem(
